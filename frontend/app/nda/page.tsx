@@ -2,16 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import NdaForm from "../components/NdaForm";
-import NdaPreview from "../components/NdaPreview";
 import Navbar from "../components/Navbar";
-import { NdaData } from "../types";
+import NdaChat from "../components/NdaChat";
 
 export default function NdaPage() {
   const router = useRouter();
   const [email, setEmail] = useState<string | null>(null);
-  const [step, setStep] = useState<"form" | "preview">("form");
-  const [ndaData, setNdaData] = useState<NdaData | null>(null);
 
   useEffect(() => {
     const raw = localStorage.getItem("user");
@@ -28,19 +24,10 @@ export default function NdaPage() {
 
   if (!email) return null;
 
-  const handleFormSubmit = (data: NdaData) => {
-    setNdaData(data);
-    setStep("preview");
-  };
-
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="flex flex-col h-screen">
       <Navbar email={email} />
-      {step === "form" ? (
-        <NdaForm onSubmit={handleFormSubmit} initialData={ndaData} />
-      ) : (
-        <NdaPreview data={ndaData!} onEdit={() => setStep("form")} />
-      )}
+      <NdaChat />
     </div>
   );
 }

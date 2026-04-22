@@ -4,7 +4,7 @@ import { NdaData } from "../types";
 
 interface Props {
   data: NdaData;
-  onEdit: () => void;
+  onEdit?: () => void;
 }
 
 function formatDate(iso: string): string {
@@ -122,12 +122,16 @@ export default function NdaPreview({ data, onEdit }: Props) {
     <div className="min-h-screen bg-gray-100 py-8 px-4">
       {/* Action Bar */}
       <div className="no-print max-w-3xl mx-auto mb-6 flex items-center justify-between">
-        <button
-          onClick={onEdit}
-          className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 font-medium"
-        >
-          ← Edit Details
-        </button>
+        {onEdit ? (
+          <button
+            onClick={onEdit}
+            className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 font-medium"
+          >
+            ← Edit Details
+          </button>
+        ) : (
+          <div />
+        )}
         <div className="flex gap-3">
           <button
             onClick={handleDownloadMarkdown}
