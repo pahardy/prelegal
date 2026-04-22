@@ -9,7 +9,7 @@ from .database import init_db
 
 app = FastAPI(title="PreLegal API")
 
-STATIC_DIR = Path(__file__).parent.parent.parent / "frontend" / "out"
+STATIC_DIR = Path(__file__).parent.parent / "frontend" / "out"
 
 
 @app.on_event("startup")
