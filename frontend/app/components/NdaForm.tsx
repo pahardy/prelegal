@@ -298,7 +298,7 @@ export default function NdaForm({ onSubmit, initialData }: Props) {
 
           <button
             type="submit"
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-xl transition-colors text-sm"
+            className="w-full bg-brand-purple hover:opacity-90 text-white font-semibold py-3 px-6 rounded-xl transition-opacity text-sm"
           >
             Generate Mutual NDA →
           </button>
