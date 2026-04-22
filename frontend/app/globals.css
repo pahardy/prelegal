@@ -1,0 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  body {
+    background: white;
+  }
+  .document-container {
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 2rem !important;
+  }
+}
