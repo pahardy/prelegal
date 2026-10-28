@@ -5,7 +5,6 @@ import NdaCreator from "@/components/NdaCreator";
 const TEMPLATES_DIR = join(process.cwd(), "..", "templates");
 
 export default async function Home() {
-  "use cache";
   const [coverPage, standardTerms] = await Promise.all([
     readFile(join(TEMPLATES_DIR, "Mutual-NDA-coverpage.md"), "utf8"),
     readFile(join(TEMPLATES_DIR, "Mutual-NDA.md"), "utf8"),
