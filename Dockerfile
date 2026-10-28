@@ -1,6 +1,5 @@
 FROM node:22-slim AS frontend
 WORKDIR /build
-COPY templates ./templates
 COPY frontend ./frontend
 WORKDIR /build/frontend
 RUN npm ci && npm run build
@@ -11,6 +10,8 @@ WORKDIR /app/backend
 COPY backend/pyproject.toml backend/uv.lock ./
 RUN uv sync --frozen --no-dev
 COPY backend/app ./app
+COPY templates /app/templates
+COPY catalog.json /app/catalog.json
 COPY --from=frontend /build/frontend/out /app/frontend/out
 ENV FRONTEND_DIR=/app/frontend/out DB_PATH=/app/prelegal.db
 EXPOSE 8000

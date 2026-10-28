@@ -5,13 +5,22 @@ import Markdown from "react-markdown";
 import rehypeRaw from "rehype-raw";
 import remarkGfm from "remark-gfm";
 import { defaultValues, fillNda, toDownloadMarkdown, type NdaValues } from "@/lib/fillNda";
+import { fillGeneric, toPlainMarkdown, type TemplateInfo } from "@/lib/fillGeneric";
 import ChatPanel, { type ChatMessage } from "./ChatPanel";
 
-type Props = { coverPage: string; standardTerms: string };
+const NDA_ID = "mutual-nda";
+
+type ChatReply = {
+  reply: string;
+  document: string | null;
+  ndaValues: NdaValues;
+  terms: Record<string, string>;
+};
 
 const GREETING: ChatMessage = {
   role: "assistant",
-  content: "Hi! I'll help you draft a Mutual NDA. What is the purpose of sharing confidential information?",
+  content:
+    "Hi! I can help you draft legal agreements such as an NDA, cloud service agreement, SLA, DPA or pilot agreement. What do you need?",
 };
 
 /** The API returns the effective date as ISO YYYY-MM-DD; the template wants a long date. */
@@ -30,8 +39,11 @@ function download(filename: string, text: string) {
   URL.revokeObjectURL(url);
 }
 
-export default function NdaCreator({ coverPage, standardTerms }: Props) {
-  const [values, setValues] = useState<NdaValues>(defaultValues);
+export default function DocumentCreator() {
+  const [docId, setDocId] = useState<string | null>(null);
+  const [template, setTemplate] = useState<TemplateInfo | null>(null);
+  const [ndaValues, setNdaValues] = useState<NdaValues>(defaultValues);
+  const [terms, setTerms] = useState<Record<string, string>>({});
   const [messages, setMessages] = useState<ChatMessage[]>([GREETING]);
   const [busy, setBusy] = useState(false);
 
@@ -43,11 +55,18 @@ export default function NdaCreator({ coverPage, standardTerms }: Props) {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: history, values }),
+        body: JSON.stringify({ messages: history, document: docId, ndaValues, terms }),
       });
       if (!res.ok) throw new Error(`Chat failed (${res.status})`);
-      const data: { reply: string; values: NdaValues } = await res.json();
-      setValues(data.values);
+      const data: ChatReply = await res.json();
+      if (data.document && data.document !== docId) {
+        const t = await fetch(`/api/templates/${data.document}`);
+        if (!t.ok) throw new Error(`Template failed (${t.status})`);
+        setTemplate(await t.json());
+      }
+      setDocId(data.document);
+      setNdaValues(data.ndaValues);
+      setTerms(data.terms);
       setMessages([...history, { role: "assistant", content: data.reply }]);
     } catch (e) {
       setMessages([...history, { role: "assistant", content: `Sorry, something went wrong: ${e}` }]);
@@ -56,30 +75,43 @@ export default function NdaCreator({ coverPage, standardTerms }: Props) {
     }
   }
 
-  const filled = useMemo(
-    () => fillNda(coverPage, standardTerms, withLongDate(values)),
-    [coverPage, standardTerms, values],
-  );
-  const ready = values.effectiveDate && values.governingLaw && values.jurisdiction && values.purpose;
+  const isNda = docId === NDA_ID;
+
+  const filled = useMemo(() => {
+    if (!template) return "";
+    if (isNda) return fillNda(template.files[0], template.files[1], withLongDate(ndaValues));
+    return fillGeneric(template, terms);
+  }, [isNda, template, ndaValues, terms]);
+
+  const ready =
+    isNda
+      ? ndaValues.effectiveDate && ndaValues.governingLaw && ndaValues.jurisdiction && ndaValues.purpose
+      : Object.keys(terms).length > 0;
+  const filename = `${docId}.md`;
+  const markdown = isNda ? toDownloadMarkdown(filled) : toPlainMarkdown(filled);
 
   return (
     <main className="mx-auto grid w-full max-w-7xl gap-8 p-6 lg:grid-cols-[26rem_1fr]">
       <section className="flex flex-col gap-3">
-        <h1 className="text-2xl font-semibold">Mutual NDA Creator</h1>
+        <h1 className="text-2xl font-semibold">Prelegal</h1>
         <ChatPanel messages={messages} busy={busy} onSend={send} />
         <button
           type="button"
           disabled={!ready}
-          onClick={() => download("Mutual-NDA.md", toDownloadMarkdown(filled))}
+          onClick={() => download(filename, markdown)}
           className="rounded bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900"
         >
-          Download NDA (.md)
+          Download (.md)
         </button>
       </section>
       <article className="nda-preview rounded border border-zinc-200 p-6 dark:border-zinc-800">
-        <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
-          {filled}
-        </Markdown>
+        {filled ? (
+          <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+            {filled}
+          </Markdown>
+        ) : (
+          <p className="text-sm text-zinc-500">Your document will appear here once you choose one.</p>
+        )}
       </article>
     </main>
   );
