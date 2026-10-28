@@ -7,6 +7,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
+from app.chat import ChatRequest, ChatResponse, chat
 from app.db import init_db
 
 FRONTEND_DIR = Path(os.environ.get("FRONTEND_DIR", "../frontend/out"))
@@ -25,6 +26,12 @@ app = FastAPI(title="Prelegal", lifespan=lifespan)
 def health() -> dict[str, str]:
     """Report that the service is up."""
     return {"status": "ok"}
+
+
+@app.post("/api/chat")
+def chat_endpoint(request: ChatRequest) -> ChatResponse:
+    """Return the AI reply and the updated NDA values."""
+    return chat(request)
 
 
 if FRONTEND_DIR.is_dir():

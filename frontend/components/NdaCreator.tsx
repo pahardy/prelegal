@@ -5,51 +5,20 @@ import Markdown from "react-markdown";
 import rehypeRaw from "rehype-raw";
 import remarkGfm from "remark-gfm";
 import { defaultValues, fillNda, toDownloadMarkdown, type NdaValues } from "@/lib/fillNda";
+import ChatPanel, { type ChatMessage } from "./ChatPanel";
 
 type Props = { coverPage: string; standardTerms: string };
 
-const inputClass =
-  "w-full rounded border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100";
+const GREETING: ChatMessage = {
+  role: "assistant",
+  content: "Hi! I'll help you draft a Mutual NDA. What is the purpose of sharing confidential information?",
+};
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="flex flex-col gap-1 text-sm font-medium">
-      {label}
-      {children}
-    </label>
-  );
-}
-
-/** Choice between a fixed number of years and an open-ended alternative. */
-function TermField(props: {
-  label: string;
-  openLabel: string;
-  years: number | null;
-  onChange: (years: number | null) => void;
-}) {
-  const { label, openLabel, years, onChange } = props;
-  return (
-    <fieldset className="flex flex-col gap-2 text-sm">
-      <legend className="font-medium">{label}</legend>
-      <div className="flex items-center gap-2">
-        <input type="radio" checked={years !== null} onChange={() => onChange(1)} aria-label="Fixed number of years" />
-        <input
-          type="number"
-          min={1}
-          className={`${inputClass} w-20`}
-          value={years ?? ""}
-          disabled={years === null}
-          onChange={(e) => onChange(Math.max(1, Number(e.target.value) || 1))}
-          aria-label={`${label} in years`}
-        />
-        <span>year(s) from the Effective Date</span>
-      </div>
-      <div className="flex items-center gap-2">
-        <input type="radio" checked={years === null} onChange={() => onChange(null)} aria-label={openLabel} />
-        <span>{openLabel}</span>
-      </div>
-    </fieldset>
-  );
+/** The API returns the effective date as ISO YYYY-MM-DD; the template wants a long date. */
+function withLongDate(v: NdaValues): NdaValues {
+  if (!v.effectiveDate) return v;
+  const date = new Date(`${v.effectiveDate}T00:00`).toLocaleDateString("en-US", { dateStyle: "long" });
+  return { ...v, effectiveDate: date };
 }
 
 function download(filename: string, text: string) {
@@ -63,74 +32,41 @@ function download(filename: string, text: string) {
 
 export default function NdaCreator({ coverPage, standardTerms }: Props) {
   const [values, setValues] = useState<NdaValues>(defaultValues);
-  const set = <K extends keyof NdaValues>(key: K, value: NdaValues[K]) =>
-    setValues((v) => ({ ...v, [key]: value }));
+  const [messages, setMessages] = useState<ChatMessage[]>([GREETING]);
+  const [busy, setBusy] = useState(false);
 
-  const filled = useMemo(() => fillNda(coverPage, standardTerms, values), [coverPage, standardTerms, values]);
+  async function send(text: string) {
+    const history = [...messages, { role: "user" as const, content: text }];
+    setMessages(history);
+    setBusy(true);
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: history, values }),
+      });
+      if (!res.ok) throw new Error(`Chat failed (${res.status})`);
+      const data: { reply: string; values: NdaValues } = await res.json();
+      setValues(data.values);
+      setMessages([...history, { role: "assistant", content: data.reply }]);
+    } catch (e) {
+      setMessages([...history, { role: "assistant", content: `Sorry, something went wrong: ${e}` }]);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const filled = useMemo(
+    () => fillNda(coverPage, standardTerms, withLongDate(values)),
+    [coverPage, standardTerms, values],
+  );
   const ready = values.effectiveDate && values.governingLaw && values.jurisdiction && values.purpose;
 
   return (
-    <main className="mx-auto grid w-full max-w-7xl gap-8 p-6 lg:grid-cols-[22rem_1fr]">
-      <form className="flex flex-col gap-4 lg:sticky lg:top-6 lg:self-start" onSubmit={(e) => e.preventDefault()}>
+    <main className="mx-auto grid w-full max-w-7xl gap-8 p-6 lg:grid-cols-[26rem_1fr]">
+      <section className="flex flex-col gap-3">
         <h1 className="text-2xl font-semibold">Mutual NDA Creator</h1>
-        <Field label="Purpose">
-          <textarea
-            className={inputClass}
-            rows={3}
-            value={values.purpose}
-            onChange={(e) => set("purpose", e.target.value)}
-          />
-        </Field>
-        <Field label="Effective date">
-          <input
-            type="date"
-            className={inputClass}
-            onChange={(e) =>
-              set(
-                "effectiveDate",
-                e.target.value
-                  ? new Date(`${e.target.value}T00:00`).toLocaleDateString("en-US", { dateStyle: "long" })
-                  : "",
-              )
-            }
-          />
-        </Field>
-        <TermField
-          label="MNDA term"
-          openLabel="Continues until terminated"
-          years={values.mndaTermYears}
-          onChange={(y) => set("mndaTermYears", y)}
-        />
-        <TermField
-          label="Term of confidentiality"
-          openLabel="In perpetuity"
-          years={values.confidentialityYears}
-          onChange={(y) => set("confidentialityYears", y)}
-        />
-        <Field label="Governing law (state)">
-          <input
-            className={inputClass}
-            placeholder="Delaware"
-            value={values.governingLaw}
-            onChange={(e) => set("governingLaw", e.target.value)}
-          />
-        </Field>
-        <Field label="Jurisdiction">
-          <input
-            className={inputClass}
-            placeholder="courts located in New Castle, DE"
-            value={values.jurisdiction}
-            onChange={(e) => set("jurisdiction", e.target.value)}
-          />
-        </Field>
-        <Field label="Modifications (optional)">
-          <textarea
-            className={inputClass}
-            rows={3}
-            value={values.modifications}
-            onChange={(e) => set("modifications", e.target.value)}
-          />
-        </Field>
+        <ChatPanel messages={messages} busy={busy} onSend={send} />
         <button
           type="button"
           disabled={!ready}
@@ -139,8 +75,7 @@ export default function NdaCreator({ coverPage, standardTerms }: Props) {
         >
           Download NDA (.md)
         </button>
-        {!ready && <p className="text-xs text-zinc-500">Fill in all required fields to download.</p>}
-      </form>
+      </section>
       <article className="nda-preview rounded border border-zinc-200 p-6 dark:border-zinc-800">
         <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
           {filled}
