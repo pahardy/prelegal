@@ -2,6 +2,8 @@
 
 import os
 import sqlite3
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 DB_PATH = Path(os.environ.get("DB_PATH", "prelegal.db"))
@@ -13,6 +15,15 @@ CREATE TABLE users (
     password_hash TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE documents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    title TEXT NOT NULL,
+    state TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 """
 
 
@@ -23,6 +34,13 @@ def init_db() -> None:
         conn.executescript(SCHEMA)
 
 
-def connect() -> sqlite3.Connection:
-    """Open a connection to the database."""
-    return sqlite3.connect(DB_PATH)
+@contextmanager
+def connect() -> Iterator[sqlite3.Connection]:
+    """Open a connection with dict-like rows; commit on success and always close."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        yield conn
+        conn.commit()
+    finally:
+        conn.close()

@@ -29,21 +29,21 @@ export default function ChatPanel({ messages, busy, onSend }: Props) {
   }
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] flex-col gap-3 lg:sticky lg:top-6">
-      <div className="flex flex-1 flex-col gap-2 overflow-y-auto rounded border border-zinc-200 p-3 dark:border-zinc-800">
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      <div className="flex flex-1 flex-col gap-2 overflow-y-auto rounded-xl border border-line bg-white p-3 shadow-sm">
         {messages.map((m, i) => (
           <p
             key={i}
-            className={`max-w-[85%] whitespace-pre-wrap rounded px-3 py-2 text-sm ${
+            className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-sm ${
               m.role === "user"
-                ? "self-end bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-                : "self-start bg-zinc-100 dark:bg-zinc-800"
+                ? "self-end bg-brand text-white"
+                : "self-start bg-background text-foreground"
             }`}
           >
             {m.content}
           </p>
         ))}
-        {busy && <p className="self-start text-sm text-zinc-500">Thinking...</p>}
+        {busy && <p className="self-start text-sm text-muted">Thinking...</p>}
         <div ref={end} />
       </div>
       <form onSubmit={submit} className="flex gap-2">
@@ -54,12 +54,12 @@ export default function ChatPanel({ messages, busy, onSend }: Props) {
           onChange={(e) => setText(e.target.value)}
           disabled={busy}
           placeholder="Type your answer..."
-          className="flex-1 rounded border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+          className="flex-1 rounded-lg border border-line bg-white px-3 py-2.5 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
         />
         <button
           type="submit"
           disabled={busy || !text.trim()}
-          className="rounded bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900"
+          className="rounded-lg bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-40"
         >
           Send
         </button>

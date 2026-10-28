@@ -36,7 +36,7 @@ NDA_PROMPT = """The chosen document is the Mutual NDA. Gather these in `ndaUpdat
 Current values: {values}"""
 
 TERMS_PROMPT = """The chosen document is the {name}. Gather values for its key terms in `termUpdates` as {{term, value}} pairs.
-Explain each term in plain language when asking. Skip terms that the document itself defines (for example "Agreement") and
+Explain each term in plain language when asking. Values are inserted into sentences of the document, so phrase each to read naturally in place of the term (for example Governing Law: "laws of the State of Delaware", because the document says "The Governing Law will govern"); do not start a value with an article. Skip terms that the document itself defines (for example "Agreement") and
 terms with obvious defaults you can propose and confirm. Party terms such as Customer, Provider, Company or Partner take the party's name. The Provider supplies the product or service and the Customer receives it; if the user has not said which party is which, leave both blank and ask.
 Every value you confirm or mention in `reply` must also appear in `termUpdates`, or it is lost.
 Key terms and current values (blank means not yet set):
@@ -90,6 +90,7 @@ class Message(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: list[Message]
+    documentId: int | None = None
     document: str | None = None
     ndaValues: NdaValues = Field(default_factory=NdaValues)
     terms: dict[str, str] = {}
@@ -97,6 +98,7 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     reply: str
+    documentId: int | None = None
     document: str | None
     ndaValues: NdaValues
     terms: dict[str, str]

@@ -3,6 +3,7 @@ import sqlite3
 from fastapi.testclient import TestClient
 
 from app import db
+from tests.conftest import sign_up
 
 
 def test_health_and_fresh_users_table(tmp_path, monkeypatch):
@@ -42,63 +43,63 @@ NO_NDA_UPDATES = {
 }
 
 
-def post_chat(tmp_path, monkeypatch, turn, body):
-    """Post to /api/chat with the model mocked to return `turn`."""
+def mock_model(monkeypatch, turn):
+    """Make every model call return `turn`."""
     import json
     from types import SimpleNamespace
 
     from app import chat as chat_module
-    from app.main import app
 
-    monkeypatch.setattr(db, "DB_PATH", tmp_path / "test.db")
     fake = SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps(turn)))])
     monkeypatch.setattr(chat_module, "completion", lambda **kwargs: fake)
-    with TestClient(app) as client:
-        return client.post("/api/chat", json=body).json()
 
 
-def test_chat_nda_updates_are_merged(tmp_path, monkeypatch):
-    turn = {
+def post_chat(client, body):
+    return client.post("/api/chat", json=body).json()
+
+
+def test_chat_nda_updates_are_merged(client, monkeypatch):
+    sign_up(client)
+    mock_model(monkeypatch, {
         "reply": "Which state?", "document": "mutual-nda", "termUpdates": [],
         "ndaUpdates": {**NO_NDA_UPDATES, "purpose": "Vendor evaluation"},
-    }
-    body = {"messages": [{"role": "user", "content": "hi"}]}
-    result = post_chat(tmp_path, monkeypatch, turn, body)
+    })
+    result = post_chat(client, {"messages": [{"role": "user", "content": "hi"}]})
     assert result["reply"] == "Which state?"
     assert result["document"] == "mutual-nda"
     assert result["ndaValues"]["purpose"] == "Vendor evaluation"
 
 
-def test_chat_choosing_a_document_resets_previous_values(tmp_path, monkeypatch):
-    turn = {
+def test_chat_choosing_a_document_resets_previous_values(client, monkeypatch):
+    sign_up(client)
+    mock_model(monkeypatch, {
         "reply": "Great.", "document": "pilot-agreement", "ndaUpdates": NO_NDA_UPDATES,
         "termUpdates": [
             {"term": "Pilot Period", "value": "60 days"},
             {"term": "Not A Term", "value": "ignored"},
         ],
-    }
+    })
     body = {
         "messages": [{"role": "user", "content": "pilot"}],
         "document": "mutual-nda", "ndaValues": {"governingLaw": "Delaware"}, "terms": {"Old": "x"},
     }
-    result = post_chat(tmp_path, monkeypatch, turn, body)
+    result = post_chat(client, body)
     assert result["document"] == "pilot-agreement"
     assert result["terms"] == {"Pilot Period": "60 days"}
     assert result["ndaValues"]["governingLaw"] == ""
 
 
-def test_chat_unknown_document_is_ignored(tmp_path, monkeypatch):
-    turn = {"reply": "No leases.", "document": "lease", "ndaUpdates": NO_NDA_UPDATES, "termUpdates": []}
-    result = post_chat(tmp_path, monkeypatch, turn, {"messages": [{"role": "user", "content": "lease"}]})
+def test_chat_unknown_document_is_ignored_and_not_saved(client, monkeypatch):
+    sign_up(client)
+    mock_model(monkeypatch, {"reply": "No leases.", "document": "lease", "ndaUpdates": NO_NDA_UPDATES, "termUpdates": []})
+    result = post_chat(client, {"messages": [{"role": "user", "content": "lease"}]})
     assert result["document"] is None
+    assert result["documentId"] is None
+    assert client.get("/api/documents").json() == []
 
 
-def test_template_endpoints(tmp_path, monkeypatch):
-    from app.main import app
-
-    monkeypatch.setattr(db, "DB_PATH", tmp_path / "test.db")
-    with TestClient(app) as client:
-        assert len(client.get("/api/templates").json()) == 11
-        pilot = client.get("/api/templates/pilot-agreement").json()
-        assert "Pilot Period" in pilot["terms"]
-        assert client.get("/api/templates/lease").status_code == 404
+def test_template_endpoints(client):
+    assert len(client.get("/api/templates").json()) == 11
+    pilot = client.get("/api/templates/pilot-agreement").json()
+    assert "Pilot Period" in pilot["terms"]
+    assert client.get("/api/templates/lease").status_code == 404
